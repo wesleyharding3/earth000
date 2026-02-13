@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Population Globe Template</title>
+<style>
+  body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+  canvas { display: block; }
+
+  #cityList {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 300px;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.7);
+    color: #fff;
+    padding: 10px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div id="cityList">
+  <h3>Cities</h3>
+  <ul id="list"></ul>
+</div>
+
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
+
+/* ===============================
+   SCENE SETUP
+=============================== */
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(
+  60,
+  window.innerWidth/window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.z = 3;
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const radius = 1;
+
+/* ===============================
+   SIZE CONFIG (50% larger global)
+=============================== */
+
+const originalBaseSize = 0.035;
+
+// Cities = 200% larger than original (3× total)
+const baseSize = originalBaseSize * 3.0;
+
+// Preserve 10% population scaling constraint
+const minCitySize = baseSize * 0.1;
+
+// Earth points = 100% larger than before (2×)
+const earthPointSize = (minCitySize * 0.8) * 1;
+
+/* ===============================
+   EARTH BACKGROUND (TEXTURE SAMPLE)
+=============================== */
+
+const loader = new THREE.TextureLoader();
+loader.load(
+  "https://threejs.org/examples/textures/land_ocean_ice_cloud_2048.jpg",
+  texture => init(texture)
+);
+
+function init(texture){
+
+  /* ---------- Earth Layer ---------- */
+
+  /* ---------- Earth Layer ---------- */
+
+  const earthCount = 40000; // adjust density as desired
+  const earthPositions = [];
+  const earthColors = [];
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = texture.image.width;
+  canvas.height = texture.image.height;
+  ctx.drawImage(texture.image, 0, 0);
+
+  const imageData = ctx.getImageData(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  ).data;
+
+  for (let i = 0; i < earthCount; i++) {
+
+    const u = Math.random();
+    const v = Math.random();
+
+    const theta = 2 * Math.PI * u;
+    const phi = Math.acos(2 * v - 1);
+
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.cos(phi);
+    const z = radius * Math.sin(phi) * Math.sin(theta);
+
+    earthPositions.push(x, y, z);
+
+    const lon = Math.atan2(z, x);
+    const lat = Math.asin(y / radius);
+
+    const uTex = (lon / (2 * Math.PI)) + 0.5;
+    const vTex = 0.5 - (lat / Math.PI);
+
+    const px = Math.floor(uTex * canvas.width);
+    const py = Math.floor(vTex * canvas.height);
+    const idx = (py * canvas.width + px) * 4;
+
+    const r = imageData[idx];
+    const g = imageData[idx + 1];
+    const b = imageData[idx + 2];
+
+    const brightness = (r + g + b) / 3;
+
+    if (brightness > 120) {
+      // Land → Green
+      earthColors.push(0.1, 0.6, 0.2);
+    } else {
+      // Ocean → Blue
+      earthColors.push(0.1, 0.3, 0.8);
+    }
+  }
+
+  const earthGeo = new THREE.BufferGeometry();
+  earthGeo.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(earthPositions, 3)
+  );
+  earthGeo.setAttribute(
+    "color",
+    new THREE.Float32BufferAttribute(earthColors, 3)
+  );
+
+  const earthMat = new THREE.PointsMaterial({
+    size: earthPointSize,
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false
+  });
+
+  const earthPoints = new THREE.Points(earthGeo, earthMat);
+  scene.add(earthPoints);
+
+
+  /* ---------- City Layer ---------- */
+
+  // 🔧 YOU EDIT THIS ARRAY
+const cities = [
+
+    ["Tokyo", 35.6895, 139.6917, 37.4],
+    ["Delhi", 28.6139, 77.2090, 32.9],
+    ["Shanghai", 31.2304, 121.4737, 29.2],
+    ["Dhaka", 23.8103, 90.4125, 23.2],
+    ["São Paulo", -23.5505, -46.6333, 22.6],
+    ["Mexico City", 19.4326, -99.1332, 22.1],
+    ["Mumbai", 19.0760, 72.8777, 22.0],
+    ["Beijing", 39.9042, 116.4074, 21.8],
+    ["Cairo", 30.0444, 31.2357, 21.3],
+    ["Osaka", 34.6937, 135.5023, 19.3],
+    ["New York", 40.7128, -74.0060, 19.0],
+    ["Karachi", 24.8607, 67.0011, 17.2],
+    ["Chongqing", 29.5630, 106.5516, 17.0],
+    ["Istanbul", 41.0082, 28.9784, 15.6],
+    ["Kinshasa", -4.4419, 15.2663, 15.6],
+    ["Buenos Aires", -34.6037, -58.3816, 15.5],
+    ["Lagos", 6.5244, 3.3792, 15.4],
+    ["Kolkata", 22.5726, 88.3639, 15.0],
+    ["Manila", 14.5995, 120.9842, 14.9],
+    ["Rio de Janeiro", -22.9068, -43.1729, 13.7],
+    ["Los Angeles", 34.0522, -118.2437, 13.2],
+    ["Guangzhou", 23.1291, 113.2644, 13.5],
+    ["Shenzhen", 22.5431, 114.0579, 12.5],
+    ["Moscow", 55.7558, 37.6173, 12.6],
+    ["Tianjin", 39.3434, 117.3616, 11.6],
+    ["Jakarta", -6.2088, 106.8456, 11.3],
+    ["Bangkok", 13.7563, 100.5018, 11.2],
+    ["Lima", -12.0464, -77.0428, 11.2],
+    ["Paris", 48.8566, 2.3522, 11.1],
+    ["London", 51.5074, -0.1278, 10.8],
+    ["Bangalore", 12.9716, 77.5946, 10.8],
+    ["Chennai", 13.0827, 80.2707, 10.9],
+    ["Bogotá", 4.7110, -74.0721, 10.7],
+    ["Hyderabad", 17.3850, 78.4867, 10.4],
+    ["Seoul", 37.5665, 126.9780, 9.9],
+    ["Nagoya", 35.1815, 136.9066, 9.6],
+    ["Tehran", 35.6892, 51.3890, 9.5],
+    ["Chicago", 41.8781, -87.6298, 9.4],
+    ["Ho Chi Minh City", 10.8231, 106.6297, 9.3],
+    ["Ahmedabad", 23.0225, 72.5714, 8.7],
+    ["Kuala Lumpur", 3.1390, 101.6869, 8.8],
+    ["Hong Kong", 22.3193, 114.1694, 7.5],
+    ["Toronto", 43.6532, -79.3832, 6.7],
+    ["Madrid", 40.4168, -3.7038, 6.7],
+    ["Johannesburg", -26.2041, 28.0473, 6.4],
+    ["Washington DC", 38.9072, -77.0369, 6.4],
+    ["Singapore", 1.3521, 103.8198, 5.9],
+    ["Barcelona", 41.3851, 2.1734, 5.6],
+    ["Sydney", -33.8688, 151.2093, 5.3],
+    ["Nairobi", -1.2921, 36.8219, 5.3],
+    ["Melbourne", -37.8136, 144.9631, 5.1],
+    ["Phoenix", 33.4484, -112.0740, 4.9],
+    ["Houston", 29.7604, -95.3698, 7.3],
+    ["Dallas", 32.7767, -96.7970, 7.6],
+    ["Miami", 25.7617, -80.1918, 6.2],
+    ["Boston", 42.3601, -71.0589, 4.8],
+    ["San Francisco", 37.7749, -122.4194, 4.7],
+    ["Seattle", 47.6062, -122.3321, 4.1],
+    ["Denver", 39.7392, -104.9903, 3.0],
+    ["San Diego", 32.7157, -117.1611, 3.3],
+    ["Philadelphia", 39.9526, -75.1652, 6.2],
+    ["Atlanta", 33.7490, -84.3880, 6.0],
+
+    ["Detroit", 42.3314, -83.0458, 4.3],
+    ["Minneapolis", 44.9778, -93.2650, 3.7],
+    ["Montreal", 45.5017, -73.5673, 4.1],
+    ["Vancouver", 49.2827, -123.1207, 2.6],
+    ["Rome", 41.9028, 12.4964, 4.3],
+    ["Berlin", 52.5200, 13.4050, 3.8],
+    ["Vienna", 48.2082, 16.3738, 2.6],
+    ["Prague", 50.0755, 14.4378, 2.7],
+    ["Warsaw", 52.2297, 21.0122, 3.1],
+    ["Stockholm", 59.3293, 18.0686, 2.4],
+    ["Oslo", 59.9139, 10.7522, 1.5],
+    ["Helsinki", 60.1699, 24.9384, 1.3],
+    ["Athens", 37.9838, 23.7275, 3.1],
+    ["Lisbon", 38.7223, -9.1393, 2.9],
+    ["Zurich", 47.3769, 8.5417, 1.4],
+    ["Geneva", 46.2044, 6.1432, 1.2],
+    ["Brussels", 50.8503, 4.3517, 2.1],
+    ["Budapest", 47.4979, 19.0402, 3.0],
+    ["Copenhagen", 55.6761, 12.5683, 2.0],
+    ["Dublin", 53.3498, -6.2603, 1.9],
+    ["Hamburg", 53.5511, 9.9937, 2.8],
+    ["Munich", 48.1351, 11.5820, 2.9],
+    ["Milan", 45.4642, 9.1900, 3.2],
+    ["Naples", 40.8518, 14.2681, 3.1],
+    ["Manchester", 53.4808, -2.2426, 2.8],
+    ["Birmingham", 52.4862, -1.8904, 2.6],
+    ["Glasgow", 55.8642, -4.2518, 1.7],
+    ["Edinburgh", 55.9533, -3.1883, 1.0],
+    ["Riyadh", 24.7136, 46.6753, 7.7],
+    ["Dubai", 25.2048, 55.2708, 3.6],
+    ["Doha", 25.2854, 51.5310, 2.4],
+    ["Kuwait City", 29.3759, 47.9774, 3.4],
+    ["Baghdad", 33.3152, 44.3661, 7.1],
+    ["Jerusalem", 31.7683, 35.2137, 1.2],
+    ["Tel Aviv", 32.0853, 34.7818, 4.3],
+    ["Casablanca", 33.5731, -7.5898, 3.7],
+    ["Algiers", 36.7538, 3.0588, 4.0],
+    ["Tunis", 36.8065, 10.1815, 2.7],
+    ["Accra", 5.6037, -0.1870, 5.0],
+    ["Abuja", 9.0765, 7.3986, 3.6],
+    ["Addis Ababa", 8.9806, 38.7578, 5.0],
+    ["Khartoum", 15.5007, 32.5599, 5.3],
+    ["Dar es Salaam", -6.7924, 39.2083, 7.0],
+    ["Luanda", -8.8390, 13.2894, 8.3],
+    ["Cape Town", -33.9249, 18.4241, 4.6],
+    ["Pretoria", -25.7479, 28.2293, 2.9],
+    ["Santiago", -33.4489, -70.6693, 7.0],
+    ["Caracas", 10.4806, -66.9036, 4.0],
+    ["Quito", -0.1807, -78.4678, 2.8],
+    ["Guayaquil", -2.1700, -79.9224, 3.0],
+    ["Panama City", 8.9824, -79.5199, 2.0],
+    ["San Jose CR", 9.9281, -84.0907, 2.2],
+    ["Havana", 23.1136, -82.3666, 2.1],
+    ["Guatemala City", 14.6349, -90.5069, 3.1],
+    ["Kathmandu", 27.7172, 85.3240, 3.0],
+    ["Colombo", 6.9271, 79.8612, 2.3],
+    ["Yangon", 16.8409, 96.1735, 5.1],
+    ["Phnom Penh", 11.5564, 104.9282, 2.3],
+    ["Ulaanbaatar", 47.8864, 106.9057, 1.6],
+    ["Tashkent", 41.2995, 69.2401, 3.0],
+    ["Almaty", 43.2220, 76.8512, 2.0],
+    ["Astana", 51.1605, 71.4704, 1.3],
+    ["Baku", 40.4093, 49.8671, 2.3],
+    ["Yerevan", 40.1792, 44.4991, 1.1],
+    ["Tbilisi", 41.7151, 44.8271, 1.2]
+
+];
+
+
+
+  const list=document.getElementById("list");
+
+  const populations=cities.map(c=>c[3]);
+  const minPop=Math.min(...populations);
+  const maxPop=Math.max(...populations);
+
+  const positions=[];
+  const colors=[];
+  const sizes=[];
+
+  cities.forEach(([name,lat,lon,pop])=>{
+
+    const phi=(90-lat)*(Math.PI/180);
+    const theta=(lon+180)*(Math.PI/180);
+
+    const x=-radius*Math.sin(phi)*Math.cos(theta);
+    const z= radius*Math.sin(phi)*Math.sin(theta);
+    const y= radius*Math.cos(phi);
+
+    positions.push(x,y,z);
+    colors.push(1.0,0.6,0.1);
+
+    const normalized=(pop-minPop)/(maxPop-minPop || 1);
+    const scaled=minCitySize+normalized*(baseSize-minCitySize);
+    sizes.push(scaled);
+
+    const li=document.createElement("li");
+    li.textContent=`${name} — ${pop}M`;
+    list.appendChild(li);
+  });
+
+  const cityGeo=new THREE.BufferGeometry();
+  cityGeo.setAttribute("position",new THREE.Float32BufferAttribute(positions,3));
+  cityGeo.setAttribute("color",new THREE.Float32BufferAttribute(colors,3));
+  cityGeo.setAttribute("size",new THREE.Float32BufferAttribute(sizes,1));
+
+  /* ---------- SHADER FOR TRUE SIZE SCALING ---------- */
+
+  const cityMat=new THREE.ShaderMaterial({
+    vertexColors:true,
+    transparent:true,
+    depthWrite:false,
+    uniforms:{
+      scale:{value:window.innerHeight/2}
+    },
+    vertexShader:`
+      attribute float size;
+      varying vec3 vColor;
+      void main(){
+        vColor=color;
+        vec4 mvPosition=modelViewMatrix*vec4(position,1.0);
+        gl_PointSize=size*(300.0/-mvPosition.z);
+        gl_Position=projectionMatrix*mvPosition;
+      }
+    `,
+    fragmentShader:`
+      varying vec3 vColor;
+      void main(){
+        float d=length(gl_PointCoord-vec2(0.5));
+        if(d>0.5) discard;
+        gl_FragColor=vec4(vColor,1.0);
+      }
+    `
+  });
+
+  const cityPoints=new THREE.Points(cityGeo,cityMat);
+  scene.add(cityPoints);
+
+  /* ---------- INTERACTION ---------- */
+
+  let dragging=false,prevX=0,prevY=0;
+
+  window.addEventListener("mousedown",e=>{
+    dragging=true;
+    prevX=e.clientX;
+    prevY=e.clientY;
+  });
+
+  window.addEventListener("mouseup",()=>dragging=false);
+
+  window.addEventListener("mousemove",e=>{
+    if(!dragging) return;
+    scene.rotation.y+=(e.clientX-prevX)*0.005;
+    scene.rotation.x+=(e.clientY-prevY)*0.005;
+    prevX=e.clientX;
+    prevY=e.clientY;
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    scene.rotation.y+=0.0008;
+    renderer.render(scene,camera);
+  }
+
+  animate();
+}
+
+/* ---------- Resize ---------- */
+
+window.addEventListener("resize",()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+</script>
+</body>
+</html>
